@@ -115,6 +115,12 @@ Edit commands:
 - `undo`
 - `redo`
 
+Pause typing:
+
+- `pause typing`
+- `resume typing`
+- `toggle typing`
+
 Sticky target:
 
 - `enable sticky target`

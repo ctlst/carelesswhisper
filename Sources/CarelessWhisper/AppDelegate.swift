@@ -25,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case toggleSubmit
         case disableSubmit
         case enableSubmit
+        case pauseTyping
+        case resumeTyping
+        case toggleTypingPause
     }
 
     private var statusItem: NSStatusItem!
@@ -73,6 +76,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         get { UserDefaults.standard.object(forKey: "typeAnywhereEnabled") as? Bool ?? false }
         set {
             UserDefaults.standard.set(newValue, forKey: "typeAnywhereEnabled")
+            refreshMenu()
+        }
+    }
+
+    private var typingPaused: Bool {
+        get { UserDefaults.standard.object(forKey: "typingPaused") as? Bool ?? false }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "typingPaused")
             refreshMenu()
         }
     }
@@ -210,6 +221,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         enabled.state = isEnabled ? .on : .off
         menu.addItem(enabled)
 
+        let pauseTyping = NSMenuItem(title: "Pause Typing", action: #selector(toggleTypingPause), keyEquivalent: "")
+        pauseTyping.target = self
+        pauseTyping.state = typingPaused ? .on : .off
+        pauseTyping.isEnabled = isEnabled
+        menu.addItem(pauseTyping)
+
         let typeAnywhere = NSMenuItem(title: "Type Anywhere", action: #selector(toggleTypeAnywhere), keyEquivalent: "")
         typeAnywhere.target = self
         typeAnywhere.state = typeAnywhereEnabled ? .on : .off
@@ -289,6 +306,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         submitAfterTyping.toggle()
     }
 
+    @objc private func toggleTypingPause() {
+        typingPaused.toggle()
+        if isEnabled {
+            startAutomaticIfNeeded()
+        }
+    }
+
     @objc private func toggleTypeAnywhere() {
         typeAnywhereEnabled.toggle()
         if isEnabled {
@@ -362,6 +386,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             stop dictation
             disable dictation
             turn off listening
+
+            Pause typing:
+            pause typing
+            resume typing
+            toggle typing
 
             Sticky target:
             enable sticky target
@@ -524,6 +553,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
+            guard !typingPaused else {
+                log("typing paused; ignored transcription: \(text)")
+                return
+            }
+
             if !typeAnywhereEnabled {
                 refreshLastTarget()
             }
@@ -553,6 +587,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if !isEnabled {
             return "Disabled"
+        }
+        if typingPaused {
+            return isDictating ? "Paused: Listening" : "Paused"
         }
         if isDictating {
             return "Listening"
@@ -783,6 +820,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return .redo
         }
 
+        let pauseTypingCommands: Set<String> = [
+            "pause",
+            "pause typing",
+            "pause dictation typing",
+            "stop typing",
+            "do not type",
+            "dont type",
+            "mute typing"
+        ]
+        if pauseTypingCommands.contains(normalized) {
+            return .pauseTyping
+        }
+
+        let resumeTypingCommands: Set<String> = [
+            "resume",
+            "resume typing",
+            "resume dictation typing",
+            "start typing",
+            "type again",
+            "unmute typing"
+        ]
+        if resumeTypingCommands.contains(normalized) {
+            return .resumeTyping
+        }
+
+        if normalized == "toggle typing" || normalized == "toggle pause" {
+            return .toggleTypingPause
+        }
+
         let typeAnywhereOnCommands: Set<String> = [
             "type anywhere",
             "enable type anywhere",
@@ -901,6 +967,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             submitAfterTyping = false
         case .enableSubmit:
             submitAfterTyping = true
+        case .pauseTyping:
+            typingPaused = true
+        case .resumeTyping:
+            typingPaused = false
+        case .toggleTypingPause:
+            typingPaused.toggle()
         }
 
         refreshMenu()
