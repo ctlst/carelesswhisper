@@ -2,6 +2,16 @@ import AppKit
 import Foundation
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private struct WhisperModelOption {
+        let title: String
+        let filename: String
+        let approximateSize: String
+
+        var downloadURL: URL {
+            URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/\(filename)")!
+        }
+    }
+
     private enum VoiceCommand {
         case stopListening
         case undo
@@ -25,6 +35,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isDictating = false
     private var armTimer: Timer?
     private var lastTarget: NSRunningApplication?
+    private var downloadingModel: WhisperModelOption?
+    private var modelDownloadTask: URLSessionDownloadTask?
+
+    private let whisperModels: [WhisperModelOption] = [
+        WhisperModelOption(title: "Base English", filename: "ggml-base.en.bin", approximateSize: "141 MB"),
+        WhisperModelOption(title: "Small English", filename: "ggml-small.en.bin", approximateSize: "466 MB"),
+        WhisperModelOption(title: "Medium English", filename: "ggml-medium.en.bin", approximateSize: "1.5 GB"),
+        WhisperModelOption(title: "Large v3", filename: "ggml-large-v3.bin", approximateSize: "3 GB")
+    ]
 
     private var isEnabled: Bool {
         get { UserDefaults.standard.object(forKey: "enabled") as? Bool ?? true }
@@ -79,6 +98,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set {
             UserDefaults.standard.set(newValue, forKey: "stopDelay")
             applyRecorderSettings()
+        }
+    }
+
+    private var selectedWhisperModel: String {
+        get { UserDefaults.standard.string(forKey: "selectedWhisperModel") ?? "ggml-base.en.bin" }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "selectedWhisperModel")
+            refreshMenu()
         }
     }
 
@@ -226,6 +253,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ))
 
         menu.addItem(.separator())
+        menu.addItem(modelMenuItem())
+
+        menu.addItem(.separator())
 
         let permissions = NSMenuItem(title: "Accessibility", action: #selector(requestAccessibility), keyEquivalent: "")
         permissions.target = self
@@ -291,6 +321,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateSliderValue(sender, text: String(format: "%.1fs", sender.doubleValue))
     }
 
+    @objc private func selectWhisperModel(_ sender: NSMenuItem) {
+        guard let model = whisperModels.first(where: { $0.filename == sender.representedObject as? String }) else {
+            return
+        }
+
+        guard downloadingModel == nil else {
+            showAlert(
+                title: "Model download in progress",
+                message: "CarelessWhisper is already downloading \(downloadingModel?.title ?? "a model")."
+            )
+            return
+        }
+
+        if modelFileExists(model.filename) {
+            selectedWhisperModel = model.filename
+            log("selected whisper model: \(model.filename)")
+            return
+        }
+
+        downloadWhisperModel(model)
+    }
+
     @objc private func requestAccessibility() {
         typer.requestAccessibilityPermission()
     }
@@ -339,6 +391,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startAutomaticIfNeeded() {
         guard isEnabled else { return }
         guard !isDictating else { return }
+        guard downloadingModel == nil else {
+            scheduleArmCheck()
+            return
+        }
         if !typeAnywhereEnabled {
             refreshLastTarget()
         }
@@ -399,6 +455,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleRecording(_ url: URL?) {
+        guard downloadingModel == nil else {
+            isDictating = false
+            refreshMenu()
+            log("recording ignored while model download is active")
+            scheduleArmCheck(after: 1.0)
+            return
+        }
+
         guard let url else {
             isDictating = false
             refreshMenu()
@@ -477,6 +541,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func statusText() -> String {
+        if let downloadingModel {
+            return "Downloading \(downloadingModel.title)"
+        }
         if !isEnabled {
             return "Disabled"
         }
@@ -495,6 +562,129 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return "Sticky: \(target.localizedName ?? "target")"
         }
         return "Waiting"
+    }
+
+    private func modelMenuItem() -> NSMenuItem {
+        let selected = whisperModels.first { $0.filename == selectedWhisperModel }
+        let title = selected.map { "Model: \($0.title)" } ?? "Model"
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+
+        for model in whisperModels {
+            let isDownloaded = modelFileExists(model.filename)
+            let isDownloading = downloadingModel?.filename == model.filename
+            let suffix = isDownloaded ? "" : " - download \(model.approximateSize)"
+            let modelItem = NSMenuItem(
+                title: isDownloading ? "\(model.title) - downloading..." : "\(model.title)\(suffix)",
+                action: #selector(selectWhisperModel(_:)),
+                keyEquivalent: ""
+            )
+            modelItem.target = self
+            modelItem.representedObject = model.filename
+            modelItem.state = selectedWhisperModel == model.filename ? .on : .off
+            modelItem.isEnabled = downloadingModel == nil && !isDownloading
+            submenu.addItem(modelItem)
+        }
+
+        if let downloadingModel {
+            submenu.addItem(.separator())
+            let item = NSMenuItem(title: "Downloading \(downloadingModel.approximateSize)...", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            submenu.addItem(item)
+        }
+
+        item.submenu = submenu
+        return item
+    }
+
+    private func modelFileExists(_ filename: String) -> Bool {
+        let fileManager = FileManager.default
+        let candidates = [
+            applicationSupportModelURL(filename),
+            Bundle.main.resourceURL?.appendingPathComponent(".models/whisper.cpp/\(filename)"),
+            URL(fileURLWithPath: fileManager.currentDirectoryPath).appendingPathComponent(".models/whisper.cpp/\(filename)")
+        ].compactMap { $0 }
+        return candidates.contains { fileManager.fileExists(atPath: $0.path) }
+    }
+
+    private func applicationSupportModelURL(_ filename: String) -> URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("CarelessWhisper/models/whisper.cpp", isDirectory: true)
+            .appendingPathComponent(filename)
+    }
+
+    private func downloadWhisperModel(_ model: WhisperModelOption) {
+        guard let destination = applicationSupportModelURL(model.filename) else {
+            showAlert(title: "Cannot download model", message: "Could not find the Application Support directory.")
+            return
+        }
+
+        downloadingModel = model
+        refreshMenu()
+        log("downloading whisper model: \(model.filename)")
+
+        let task = URLSession.shared.downloadTask(with: model.downloadURL) { [weak self] temporaryURL, response, error in
+            DispatchQueue.main.async {
+                self?.finishModelDownload(model: model, destination: destination, temporaryURL: temporaryURL, response: response, error: error)
+            }
+        }
+        modelDownloadTask = task
+        task.resume()
+        showAlert(
+            title: "Downloading \(model.title)",
+            message: "CarelessWhisper is downloading \(model.approximateSize). It will switch to this model when the download finishes."
+        )
+    }
+
+    private func finishModelDownload(
+        model: WhisperModelOption,
+        destination: URL,
+        temporaryURL: URL?,
+        response: URLResponse?,
+        error: Error?
+    ) {
+        defer {
+            downloadingModel = nil
+            modelDownloadTask = nil
+            refreshMenu()
+            if isEnabled {
+                scheduleArmCheck(after: 0.5)
+            }
+        }
+
+        if let error {
+            log("model download failed: \(error.localizedDescription)")
+            showAlert(title: "Model download failed", message: error.localizedDescription)
+            return
+        }
+
+        if let httpResponse = response as? HTTPURLResponse, !(200..<300).contains(httpResponse.statusCode) {
+            let message = "Download failed with HTTP \(httpResponse.statusCode)."
+            log("model download failed: \(message)")
+            showAlert(title: "Model download failed", message: message)
+            return
+        }
+
+        guard let temporaryURL else {
+            let message = "The download finished without a model file."
+            log("model download failed: \(message)")
+            showAlert(title: "Model download failed", message: message)
+            return
+        }
+
+        do {
+            let directory = destination.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: temporaryURL, to: destination)
+            selectedWhisperModel = model.filename
+            log("selected downloaded whisper model: \(model.filename)")
+        } catch {
+            log("model install failed: \(error.localizedDescription)")
+            showAlert(title: "Model install failed", message: error.localizedDescription)
+        }
     }
 
     private func refreshLastTarget() {

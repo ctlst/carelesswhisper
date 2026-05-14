@@ -95,6 +95,9 @@ Menu controls:
 - **Sensitivity**: higher values detect quieter speech.
 - **Start**: minimum recording time before silence can stop the capture.
 - **Stop**: silence duration required to finish an utterance.
+- **Model**: selects the Whisper model. `Base English` is bundled; larger models download when selected and are used after the download finishes.
+
+Downloaded models are stored in `~/Library/Application Support/CarelessWhisper/models/whisper.cpp/`.
 
 ## Voice Commands
 

@@ -36,8 +36,11 @@ final class WhisperTranscriber {
             return URL(fileURLWithPath: configured)
         }
 
-        let modelName = env("CPP_MODEL_NAME") ?? "ggml-base.en.bin"
+        let modelName = env("CPP_MODEL_NAME")
+            ?? UserDefaults.standard.string(forKey: "selectedWhisperModel")
+            ?? "ggml-base.en.bin"
         let candidates = [
+            applicationSupportModelURL(modelName: modelName),
             Bundle.main.resourceURL?.appendingPathComponent(".models/whisper.cpp/\(modelName)"),
             URL(fileURLWithPath: fileManager.currentDirectoryPath).appendingPathComponent(".models/whisper.cpp/\(modelName)")
         ].compactMap { $0 }
@@ -47,6 +50,12 @@ final class WhisperTranscriber {
         }
 
         throw NSError(domain: "CarelessWhisper", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not find whisper.cpp model"])
+    }
+
+    private func applicationSupportModelURL(modelName: String) -> URL? {
+        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("CarelessWhisper/models/whisper.cpp", isDirectory: true)
+            .appendingPathComponent(modelName)
     }
 
     private func env(_ suffix: String) -> String? {
