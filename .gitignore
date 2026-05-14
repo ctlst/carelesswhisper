@@ -1,0 +1,26 @@
+.DS_Store
+
+# SwiftPM / build output
+.build/
+
+# Local app bundle artifacts
+LocalWhisper.app/
+
+# Python environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+
+# Whisper model cache
+.models/
+
+# Vendored native backend source/build
+Vendor/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Editor metadata
+.idea/
+.vscode/
