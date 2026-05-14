@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "LocalWhisper",
+    name: "CarelessWhisper",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "LocalWhisper", targets: ["LocalWhisper"])
+        .executable(name: "CarelessWhisper", targets: ["CarelessWhisper"])
     ],
     targets: [
         .target(
@@ -33,9 +33,9 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "LocalWhisper",
+            name: "CarelessWhisper",
             dependencies: ["WhisperBridge"],
-            path: "Sources/LocalWhisper"
+            path: "Sources/CarelessWhisper"
         )
     ]
 )

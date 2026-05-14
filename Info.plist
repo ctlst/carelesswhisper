@@ -3,11 +3,15 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleExecutable</key>
-	<string>LocalWhisper</string>
+	<string>CarelessWhisper</string>
 	<key>CFBundleIdentifier</key>
-	<string>dev.ctlst.localwhisper</string>
+	<string>dev.ctlst.carelesswhisper</string>
 	<key>CFBundleName</key>
-	<string>LocalWhisper</string>
+	<string>CarelessWhisper</string>
+	<key>CFBundleDisplayName</key>
+	<string>CarelessWhisper</string>
+	<key>CFBundleIconFile</key>
+	<string>CarelessWhisper</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -18,7 +22,13 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>CarelessWhisper needs Accessibility access to type transcribed text into supported apps.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>LocalWhisper records short dictation snippets for local transcription.</string>
+	<string>CarelessWhisper records short dictation snippets for local transcription.</string>
 </dict>
 </plist>

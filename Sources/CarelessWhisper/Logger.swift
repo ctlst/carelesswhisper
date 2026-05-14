@@ -2,7 +2,7 @@ import Foundation
 
 func log(_ message: String) {
     let directory = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/localwhisper", isDirectory: true)
+        .appendingPathComponent(".config/carelesswhisper", isDirectory: true)
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let file = directory.appendingPathComponent("debug.log")
     let line = "[\(Date())] \(message)\n"

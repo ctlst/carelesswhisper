@@ -28,7 +28,7 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
         stop()
 
         let directory = FileManager.default.temporaryDirectory
-        let url = directory.appendingPathComponent("localwhisper-\(UUID().uuidString).wav")
+        let url = directory.appendingPathComponent("carelesswhisper-\(UUID().uuidString).wav")
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
             AVSampleRateKey: 16_000,

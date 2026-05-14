@@ -1,86 +1,214 @@
-# LocalWhisper
+# CarelessWhisper
 
-LocalWhisper is a small macOS menu-bar dictation injector for Claude, Codex, and OpenCode.
+CarelessWhisper is a macOS menu-bar dictation injector for Claude, Codex, and OpenCode.
 
-When enabled, it listens while a supported coding agent window is active, transcribes detected speech locally with `openai-whisper`, and types the result into that window. It follows the same guardrail as `slapmac`: if Claude/Codex/OpenCode is not active, it refuses to inject text.
+When enabled, it listens for speech, transcribes locally with a directly linked `whisper.cpp` backend, and types the result into a supported coding-agent window. It can also remember the last supported target, so you can click around in other apps while still dictating back into your terminal or agent.
+
+CarelessWhisper is built for local/offline use. Audio is recorded and transcribed on your machine.
+
+## Features
+
+- Always-on dictation while enabled.
+- Local `whisper.cpp` transcription through a C bridge linked into the Swift app.
+- No Python, Torch, ffmpeg, or Homebrew `whisper-cli` path.
+- Sticky target mode: reactivate the last Claude/Codex/OpenCode target before typing.
+- Supported terminal detection for Claude, Codex, and OpenCode CLIs.
+- Sensitivity, start-delay, and stop-delay sliders.
+- Voice commands for stopping dictation and toggling common settings.
+- Sanitizes common Whisper non-speech tags such as `[MUSIC]`, `[SOUNDS]`, and `[BLANK_AUDIO]`.
+- Self-contained `.app` bundle with the GGML model file included.
 
 ## Requirements
 
-- macOS 14+
-- Swift toolchain
-- CMake
+- macOS 14 or newer.
+- Xcode Command Line Tools.
+- CMake.
+- Internet access for the first build, to download `whisper.cpp` source and the GGML model.
+
+Install the command-line tools if needed:
+
+```bash
+xcode-select --install
+```
+
+Install CMake. With Homebrew:
+
+```bash
+brew install cmake
+```
+
+## Quick Start
+
+```bash
+git clone https://github.com/ctlst/carelesswhisper.git
+cd carelesswhisper
+make install
+open /Applications/CarelessWhisper.app
+```
+
+On first launch, grant:
+
+- **Microphone** permission, for recording.
+- **Accessibility** permission, for typing into the active target.
+
+If the Accessibility prompt does not appear, open System Settings -> Privacy & Security -> Accessibility and enable `CarelessWhisper.app`.
+
+## How It Works
+
+The normal path is:
+
+```text
+Swift menu-bar app
+-> AVAudioRecorder 16 kHz mono WAV
+-> Swift VAD-style speech/silence detection
+-> C bridge
+-> linked whisper.cpp static libraries
+-> bundled GGML model
+-> command parser
+-> CGEvent typing into the target app
+```
+
+The app bundle contains the Swift executable and the model file. The model is data, so the install is one `.app` bundle rather than one literal executable.
+
+## Usage
+
+The **Enabled** menu item is the arming switch.
+
+When enabled:
+
+- If Claude, Codex, OpenCode, or a supported terminal running one of those CLIs is focused, CarelessWhisper listens for speech.
+- If speech is detected, it records until silence, transcribes, types the text, optionally presses Return, then listens again.
+- If sticky target mode is on, CarelessWhisper remembers the last supported target and reactivates it before typing.
+- If sticky target mode is off and no supported target is focused, it waits without recording or injecting text.
+
+Menu controls:
+
+- **Enabled**: arms/disarms listening.
+- **Auto-Return**: submits after typing.
+- **Sticky Target**: reactivates the last supported target before typing.
+- **Sensitivity**: higher values detect quieter speech.
+- **Start**: minimum recording time before silence can stop the capture.
+- **Stop**: silence duration required to finish an utterance.
+
+## Voice Commands
+
+These are interpreted only when the whole utterance is a short matching phrase. Longer sentences are typed normally.
+
+Stop dictation:
+
+- `stop listening`
+- `stop dictation`
+- `disable dictation`
+- `turn off listening`
+
+Sticky target:
+
+- `enable sticky target`
+- `disable sticky target`
+- `toggle sticky target`
+
+Submit behavior:
+
+- `press return`
+- `do not press return`
+- `toggle submit`
+
+After `stop listening`, CarelessWhisper is no longer recording, so it cannot hear a voice command to start again. Re-enable it from the menu bar. A command-only wake listener is tracked in [IDEAS.md](IDEAS.md).
+
+## Supported Targets
+
+Desktop apps:
+
+- Claude
+- Claude Code
+- Codex
+- OpenCode
+
+Supported terminal apps:
+
+- Terminal
+- iTerm2
+- Ghostty
+- Warp
+- Alacritty
+- kitty
+- WezTerm
+- Hyper
+
+For terminal targets, CarelessWhisper checks that a `claude`, `codex`, or `opencode` process is running before injecting text.
+
+## Build Targets
 
 ```bash
 make setup-native
 ```
 
-`setup-native` downloads and builds vendored `whisper.cpp` static libraries, then downloads the GGML base English model. The native path records WAV directly, so ffmpeg is not needed for LocalWhisper's own recordings.
+Downloads vendored `whisper.cpp`, builds static libraries, and downloads `ggml-base.en.bin`.
 
-The old Python/OpenAI Whisper backend is still available as a fallback with `make setup`. Python fallback assets are not bundled by default; set `LOCALWHISPER_BUNDLE_PYTHON=1` when running `make app` or `make install` if you want them included.
+```bash
+make app
+```
 
-## Run
+Builds `CarelessWhisper.app` in the repo.
+
+```bash
+make install
+```
+
+Builds and installs `/Applications/CarelessWhisper.app`.
 
 ```bash
 make run
 ```
 
-Use the menu-bar icon, then choose **Dictate Now**.
-
-## Behavior
-
-The **Enabled** menu item is the arming switch. When it is on:
-
-- If Claude, Codex, OpenCode, or a supported terminal running one of those CLIs is focused, LocalWhisper listens for speech.
-- If it hears speech, it records until about `0.8s` of silence, transcribes, types the text, optionally presses Return, then listens again.
-- If **Use Last Target When Focus Changes** is on, it remembers the last supported target and reactivates it before typing. This lets you click another window while dictating back into the terminal or agent you last selected.
-- If sticky target mode is off and no supported target is focused, it waits and checks again instead of recording or injecting text.
-- **Dictate Now** still works as a one-shot manual trigger.
-
-Menu controls:
-
-- **Sensitivity**: higher values detect quieter speech.
-- **Start Delay**: minimum recording time before silence can stop the capture.
-- **Stop Delay**: silence duration required to finish an utterance.
-
-Voice commands:
-
-- `stop listening`, `stop dictation`, `disable dictation`, `turn off listening`: disables LocalWhisper and stops re-arming.
-- `enable sticky target`, `disable sticky target`, `toggle sticky target`: controls whether focus returns to the last target.
-- `press return`, `do not press return`, `toggle submit`: controls whether Return is sent after typing.
-
-Voice commands are only treated as commands when the whole utterance is a short matching phrase. Longer sentences are typed normally.
-
-## Install As App
+Runs from SwiftPM for development.
 
 ```bash
-make install
-open /Applications/LocalWhisper.app
+make clean
 ```
 
-If `.venv` and `.models` exist when you run `make app` or `make install`, they are copied into the app bundle so the installed app can run without shell environment variables.
+Removes Swift build output and local app bundle. It does not remove downloaded models or vendored source.
 
-The app needs:
-
-- Microphone permission for recording
-- Accessibility permission for typing into the focused app
-
-## Supported Targets
-
-LocalWhisper injects only when the focused app is Claude, Claude Code, Codex, OpenCode, or a supported terminal with a `claude`, `codex`, or `opencode` process running.
-
-Supported terminals: Terminal, iTerm2, Ghostty, Warp, Alacritty, kitty, WezTerm, Hyper.
-
-## Settings
+## Configuration
 
 Environment variables:
 
-- `LOCALWHISPER_BACKEND`: `whisper.cpp` or `python`, default auto-detect
-- `LOCALWHISPER_LANGUAGE`: Whisper language, default `en` for `whisper.cpp`, `auto` for Python fallback
-- `LOCALWHISPER_WHISPER_CLI`: path to `whisper-cli`
-- `LOCALWHISPER_CPP_MODEL`: path to a GGML whisper.cpp model
-- `LOCALWHISPER_CPP_MODEL_NAME`: model filename under `.models/whisper.cpp`, default `ggml-base.en.bin`
-- `LOCALWHISPER_MODEL`: Python Whisper model name, default `base`
-- `LOCALWHISPER_PYTHON`: Python executable, default `python3`
-- `LOCALWHISPER_MODEL_DIR`: model cache directory, default `./.models/whisper` for the project helper
+- `CARELESSWHISPER_LANGUAGE`: Whisper language, default `en`.
+- `CARELESSWHISPER_CPP_MODEL`: path to a GGML `whisper.cpp` model.
+- `CARELESSWHISPER_CPP_MODEL_NAME`: model filename under `.models/whisper.cpp`, default `ggml-base.en.bin`.
 
-If `.venv/bin/python3` exists in the app bundle or project directory, the app uses it automatically.
+## Troubleshooting
+
+Check the debug log:
+
+```bash
+tail -f ~/.config/carelesswhisper/debug.log
+```
+
+If the yellow macOS microphone indicator is on but nothing types:
+
+- Confirm Accessibility permission is granted to `/Applications/CarelessWhisper.app`.
+- Confirm **Enabled** is on in the menu.
+- Focus a supported target once so sticky target mode has something to remember.
+- Check the debug log for `blocked` or transcription errors.
+
+If build fails because CMake is missing:
+
+```bash
+brew install cmake
+```
+
+## Repository Notes
+
+Generated or heavy artifacts are intentionally ignored:
+
+- `.build/`
+- `Vendor/`
+- `.models/`
+- `CarelessWhisper.app/`
+
+They are recreated by `make install`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

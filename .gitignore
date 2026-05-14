@@ -2,14 +2,10 @@
 
 # SwiftPM / build output
 .build/
+.swiftpm/
 
 # Local app bundle artifacts
-LocalWhisper.app/
-
-# Python environment and caches
-.venv/
-__pycache__/
-*.py[cod]
+CarelessWhisper.app/
 
 # Whisper model cache
 .models/
@@ -20,7 +16,10 @@ Vendor/
 # Logs and temp files
 *.log
 *.tmp
+.env
 
 # Editor metadata
 .idea/
 .vscode/
+*.xcuserstate
+xcuserdata/

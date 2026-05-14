@@ -1,5 +1,5 @@
-#ifndef LOCALWHISPER_BRIDGE_H
-#define LOCALWHISPER_BRIDGE_H
+#ifndef CARELESSWHISPER_BRIDGE_H
+#define CARELESSWHISPER_BRIDGE_H
 
 #ifdef __cplusplus
 extern "C" {

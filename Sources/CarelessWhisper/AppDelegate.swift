@@ -2,14 +2,8 @@ import AppKit
 import Foundation
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private enum TriggerMode {
-        case automatic
-        case manual
-    }
-
     private enum VoiceCommand {
         case stopListening
-        case startListening
         case toggleStickyTarget
         case disableStickyTarget
         case enableStickyTarget
@@ -25,7 +19,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let transcriber = WhisperTranscriber()
     private var isDictating = false
     private var armTimer: Timer?
-    private var currentMode: TriggerMode = .automatic
     private var lastTarget: NSRunningApplication?
 
     private var isEnabled: Bool {
@@ -57,7 +50,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set {
             UserDefaults.standard.set(newValue, forKey: "sensitivity")
             applyRecorderSettings()
-            refreshMenu()
         }
     }
 
@@ -66,7 +58,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set {
             UserDefaults.standard.set(newValue, forKey: "startDelay")
             applyRecorderSettings()
-            refreshMenu()
         }
     }
 
@@ -75,7 +66,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set {
             UserDefaults.standard.set(newValue, forKey: "stopDelay")
             applyRecorderSettings()
-            refreshMenu()
         }
     }
 
@@ -87,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !granted {
                 self.showAlert(
                     title: "Microphone access required",
-                    message: "LocalWhisper needs microphone access to record dictation snippets."
+                    message: "CarelessWhisper needs microphone access to record dictation snippets."
                 )
             } else {
                 self.startAutomaticIfNeeded()
@@ -106,9 +96,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateIcon() {
-        let symbol = isDictating ? "waveform.circle.fill" : (isEnabled ? "mic.circle.fill" : "mic.circle")
-        statusItem.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "LocalWhisper")
+        statusItem.button?.image = statusIcon()
         statusItem.button?.image?.isTemplate = true
+    }
+
+    private func statusIcon() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18))
+        image.lockFocus()
+
+        let strokeColor = NSColor.labelColor
+        strokeColor.setStroke()
+
+        let path = NSBezierPath()
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        path.lineWidth = isDictating ? 2.7 : 2.3
+
+        let midY: CGFloat = 9
+        let points: [NSPoint] = [
+            NSPoint(x: 2.0, y: midY),
+            NSPoint(x: 4.2, y: isEnabled ? 5.0 : 7.0),
+            NSPoint(x: 6.5, y: isEnabled ? 13.0 : 11.0),
+            NSPoint(x: 9.0, y: isDictating ? 3.0 : 5.0),
+            NSPoint(x: 11.5, y: isDictating ? 15.0 : 13.0),
+            NSPoint(x: 13.8, y: isEnabled ? 5.0 : 7.0),
+            NSPoint(x: 16.0, y: midY)
+        ]
+
+        path.move(to: points[0])
+        for point in points.dropFirst() {
+            path.line(to: point)
+        }
+        path.stroke()
+
+        if !isEnabled {
+            let slash = NSBezierPath()
+            slash.lineCapStyle = .round
+            slash.lineWidth = 2.0
+            slash.move(to: NSPoint(x: 4.0, y: 4.0))
+            slash.line(to: NSPoint(x: 14.0, y: 14.0))
+            slash.stroke()
+        }
+
+        image.unlockFocus()
+        image.accessibilityDescription = "CarelessWhisper"
+        image.isTemplate = true
+        return image
     }
 
     private func buildMenu() -> NSMenu {
@@ -120,24 +153,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        let dictate = NSMenuItem(title: isDictating ? "Listening..." : "Dictate Now", action: #selector(dictateNow), keyEquivalent: "")
-        dictate.target = self
-        dictate.isEnabled = isEnabled && !isDictating
-        menu.addItem(dictate)
-
-        menu.addItem(.separator())
-
         let enabled = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
         enabled.target = self
         enabled.state = isEnabled ? .on : .off
         menu.addItem(enabled)
 
-        let submit = NSMenuItem(title: "Press Return After Typing", action: #selector(toggleSubmit), keyEquivalent: "")
+        let submit = NSMenuItem(title: "Auto-Return", action: #selector(toggleSubmit), keyEquivalent: "")
         submit.target = self
         submit.state = submitAfterTyping ? .on : .off
         menu.addItem(submit)
 
-        let sticky = NSMenuItem(title: "Use Last Target When Focus Changes", action: #selector(toggleStickyTarget), keyEquivalent: "")
+        let sticky = NSMenuItem(title: "Sticky Target", action: #selector(toggleStickyTarget), keyEquivalent: "")
         sticky.target = self
         sticky.state = stickyTargetEnabled ? .on : .off
         menu.addItem(sticky)
@@ -152,7 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(sensitivityChanged(_:))
         ))
         menu.addItem(sliderMenuItem(
-            title: "Start Delay",
+            title: "Start",
             valueText: String(format: "%.1fs", startDelay),
             minValue: 0.1,
             maxValue: 2.0,
@@ -160,7 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(startDelayChanged(_:))
         ))
         menu.addItem(sliderMenuItem(
-            title: "Stop Delay",
+            title: "Stop",
             valueText: String(format: "%.1fs", stopDelay),
             minValue: 0.2,
             maxValue: 2.5,
@@ -170,16 +196,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        let permissions = NSMenuItem(title: "Request Accessibility Permission", action: #selector(requestAccessibility), keyEquivalent: "")
+        let permissions = NSMenuItem(title: "Accessibility", action: #selector(requestAccessibility), keyEquivalent: "")
         permissions.target = self
         menu.addItem(permissions)
 
-        let logItem = NSMenuItem(title: "Open Debug Log", action: #selector(openLog), keyEquivalent: "")
+        let logItem = NSMenuItem(title: "Debug Log", action: #selector(openLog), keyEquivalent: "")
         logItem.target = self
         menu.addItem(logItem)
 
+        let commandsItem = NSMenuItem(title: "Voice Commands", action: #selector(showVoiceCommands), keyEquivalent: "")
+        commandsItem.target = self
+        menu.addItem(commandsItem)
+
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit LocalWhisper", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         return menu
     }
@@ -210,14 +240,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func sensitivityChanged(_ sender: NSSlider) {
         sensitivity = sender.doubleValue
+        updateSliderValue(sender, text: "\(Int(sender.doubleValue.rounded()))%")
     }
 
     @objc private func startDelayChanged(_ sender: NSSlider) {
         startDelay = sender.doubleValue
+        updateSliderValue(sender, text: String(format: "%.1fs", sender.doubleValue))
     }
 
     @objc private func stopDelayChanged(_ sender: NSSlider) {
         stopDelay = sender.doubleValue
+        updateSliderValue(sender, text: String(format: "%.1fs", sender.doubleValue))
     }
 
     @objc private func requestAccessibility() {
@@ -226,37 +259,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openLog() {
         let path = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/localwhisper/debug.log")
+            .appendingPathComponent(".config/carelesswhisper/debug.log")
         NSWorkspace.shared.open(path)
     }
 
-    @objc private func dictateNow() {
-        guard isEnabled else { return }
-        guard !isDictating else { return }
-        armTimer?.invalidate()
-        armTimer = nil
+    @objc private func showVoiceCommands() {
+        showAlert(
+            title: "Voice Commands",
+            message: """
+            Stop dictation:
+            stop listening
+            stop dictation
+            disable dictation
+            turn off listening
 
-        log("dictate requested - frontmost: \(focus.activeDescription())")
-        refreshLastTarget()
-        guard typingTarget() != nil else {
-            log("blocked: no supported typing target")
-            showAlert(title: "No target selected", message: targetHelpText())
-            return
-        }
+            Sticky target:
+            enable sticky target
+            disable sticky target
+            toggle sticky target
 
-        guard typer.hasAccessibilityPermission else {
-            log("blocked: no accessibility permission")
-            typer.requestAccessibilityPermission()
-            return
-        }
-
-        recorder.requestPermission { granted in
-            guard granted else {
-                self.showAlert(title: "Microphone access required", message: "Grant LocalWhisper microphone access in System Settings.")
-                return
-            }
-            self.startRecording(mode: .manual)
-        }
+            Submit:
+            press return
+            do not press return
+            toggle submit
+            """
+        )
     }
 
     private func startAutomaticIfNeeded() {
@@ -279,7 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.scheduleArmCheck()
                 return
             }
-            self.startRecording(mode: .automatic)
+            self.startRecording()
         }
     }
 
@@ -300,13 +327,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         log("disabled")
     }
 
-    private func startRecording(mode: TriggerMode) {
+    private func startRecording() {
         do {
             applyRecorderSettings()
-            currentMode = mode
             isDictating = true
             refreshMenu()
-            log("recording started (\(mode == .automatic ? "automatic" : "manual"))")
+            log("recording started")
             try recorder.recordUntilSilence { [weak self] url in
                 DispatchQueue.main.async {
                     self?.handleRecording(url)
@@ -316,9 +342,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isDictating = false
             refreshMenu()
             log("recording failed: \(error.localizedDescription)")
-            if currentMode == .manual {
-                showAlert(title: "Recording failed", message: error.localizedDescription)
-            }
             scheduleArmCheck()
         }
     }
@@ -328,9 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isDictating = false
             refreshMenu()
             log("recording ended without speech")
-            if currentMode == .automatic {
-                scheduleArmCheck(after: 0.2)
-            }
+            scheduleArmCheck(after: 0.2)
             return
         }
 
@@ -350,32 +371,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleTranscription(_ result: Result<TranscriptionResult, Error>) {
-        let mode = currentMode
         isDictating = false
         refreshMenu()
         defer {
             if isEnabled {
-                scheduleArmCheck(after: mode == .automatic ? 0.3 : 1.0)
+                scheduleArmCheck(after: 0.3)
             }
         }
 
         switch result {
         case .failure(let error):
             log("transcription failed: \(error.localizedDescription)")
-            if mode == .manual {
-                showAlert(title: "Transcription failed", message: error.localizedDescription)
-            }
         case .success(let transcription):
             guard transcription.success else {
                 let message = transcription.error ?? "Unknown Whisper error"
                 log("transcription failed: \(message)")
-                if mode == .manual {
-                    showAlert(title: "Transcription failed", message: message)
-                }
                 return
             }
 
-            let text = transcription.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let rawText = transcription.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let text = sanitizeTranscription(rawText)
+            if text != rawText {
+                log("sanitized transcription: \(rawText) -> \(text)")
+            }
             guard !text.isEmpty else {
                 log("transcription empty")
                 return
@@ -389,9 +407,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             refreshLastTarget()
             guard let target = typingTarget() else {
                 log("blocked after transcription: no typing target")
-                if mode == .manual {
-                    showAlert(title: "No target selected", message: targetHelpText())
-                }
                 return
             }
 
@@ -408,19 +423,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func statusText() -> String {
         if !isEnabled {
-            return "Status: Disabled"
+            return "Disabled"
         }
         if isDictating {
-            return currentMode == .automatic ? "Status: Listening" : "Status: Dictating"
+            return "Listening"
         }
         if let current = focus.currentSupportedApplication() {
             lastTarget = current
-            return "Status: Armed for \(current.localizedName ?? "target")"
+            return "Armed: \(current.localizedName ?? "target")"
         }
         if stickyTargetEnabled, let target = usableLastTarget() {
-            return "Status: Armed for last \(target.localizedName ?? "target")"
+            return "Sticky: \(target.localizedName ?? "target")"
         }
-        return "Status: Waiting for Claude/Codex/OpenCode"
+        return "Waiting"
     }
 
     private func refreshLastTarget() {
@@ -446,9 +461,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func targetHelpText() -> String {
         if stickyTargetEnabled {
-            return "Focus Claude, Codex, OpenCode, or a supported terminal once so LocalWhisper knows where to type."
+            return "Focus Claude, Codex, OpenCode, or a supported terminal once so CarelessWhisper knows where to type."
         }
         return "Focus Claude, Codex, OpenCode, or a supported terminal before dictating, or enable sticky target mode."
+    }
+
+    private func sanitizeTranscription(_ text: String) -> String {
+        let artifactPattern = #"(?i)\s*[\[\(]\s*(music|sound|sounds|blank(?:[_ -]?audio)?|silence|noise|no[_ -]?speech|inaudible|applause|laughter)\s*[\]\)]\s*"#
+        return text
+            .replacingOccurrences(of: artifactPattern, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func voiceCommand(from text: String) -> VoiceCommand? {
@@ -462,27 +485,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "turn off dictation",
             "turn off listening",
             "local whisper stop",
-            "localwhisper stop",
+            "careless whisper stop",
+            "carelesswhisper stop",
             "local whisper stop listening",
-            "localwhisper stop listening"
+            "careless whisper stop listening",
+            "carelesswhisper stop listening"
         ]
         if stopCommands.contains(normalized) {
             return .stopListening
-        }
-
-        let startCommands: Set<String> = [
-            "start listening",
-            "start dictation",
-            "enable dictation",
-            "turn on dictation",
-            "turn on listening",
-            "local whisper start",
-            "localwhisper start",
-            "local whisper start listening",
-            "localwhisper start listening"
-        ]
-        if startCommands.contains(normalized) {
-            return .startListening
         }
 
         let stickyOnCommands: Set<String> = [
@@ -547,9 +557,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .stopListening:
             isEnabled = false
             disarm()
-        case .startListening:
-            isEnabled = true
-            startAutomaticIfNeeded()
         case .toggleStickyTarget:
             stickyTargetEnabled.toggle()
             if !stickyTargetEnabled {
@@ -599,26 +606,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         action: Selector
     ) -> NSMenuItem {
         let item = NSMenuItem()
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 48))
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 42))
 
         let label = NSTextField(labelWithString: title)
-        label.frame = NSRect(x: 12, y: 25, width: 120, height: 18)
+        label.frame = NSRect(x: 12, y: 22, width: 90, height: 17)
         label.font = .systemFont(ofSize: 12)
         view.addSubview(label)
 
         let valueLabel = NSTextField(labelWithString: valueText)
-        valueLabel.frame = NSRect(x: 178, y: 25, width: 70, height: 18)
+        valueLabel.identifier = NSUserInterfaceItemIdentifier("sliderValue")
+        valueLabel.frame = NSRect(x: 154, y: 22, width: 54, height: 17)
         valueLabel.alignment = .right
         valueLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         view.addSubview(valueLabel)
 
         let slider = NSSlider(value: value, minValue: minValue, maxValue: maxValue, target: self, action: action)
-        slider.frame = NSRect(x: 10, y: 4, width: 238, height: 22)
-        slider.isContinuous = false
+        slider.frame = NSRect(x: 10, y: 3, width: 198, height: 20)
+        slider.isContinuous = true
         view.addSubview(slider)
 
         item.view = view
         return item
+    }
+
+    private func updateSliderValue(_ slider: NSSlider, text: String) {
+        guard let view = slider.superview else { return }
+        let label = view.subviews.compactMap { $0 as? NSTextField }.first {
+            $0.identifier?.rawValue == "sliderValue"
+        }
+        label?.stringValue = text
     }
 
     private func checkAccessibility() {

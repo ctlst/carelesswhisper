@@ -19,10 +19,6 @@ final class FocusChecker {
         "com.github.wez.wezterm"
     ]
 
-    func isSupportedToolActive() -> Bool {
-        currentSupportedApplication() != nil
-    }
-
     func currentSupportedApplication() -> NSRunningApplication? {
         guard let front = NSWorkspace.shared.frontmostApplication else { return nil }
         let name = front.localizedName ?? ""
