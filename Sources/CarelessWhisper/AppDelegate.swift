@@ -37,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let transcriber = WhisperTranscriber()
     private var isDictating = false
     private var armTimer: Timer?
+    private var pauseBlinkTimer: Timer?
+    private var pauseBlinkOn = true
     private var lastTarget: NSRunningApplication?
     private var downloadingModel: WhisperModelOption?
     private var modelDownloadTask: URLSessionDownloadTask?
@@ -52,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         get { UserDefaults.standard.object(forKey: "enabled") as? Bool ?? true }
         set {
             UserDefaults.standard.set(newValue, forKey: "enabled")
+            updatePauseBlinkTimer()
             refreshMenu()
         }
     }
@@ -84,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         get { UserDefaults.standard.object(forKey: "typingPaused") as? Bool ?? false }
         set {
             UserDefaults.standard.set(newValue, forKey: "typingPaused")
+            updatePauseBlinkTimer()
             refreshMenu()
         }
     }
@@ -138,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: 28)
+        updatePauseBlinkTimer()
         refreshMenu()
     }
 
@@ -152,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func statusIcon() -> NSImage {
-        let resourceName = isEnabled ? "active" : "inactive"
+        let resourceName = iconIsActive ? "active" : "inactive"
         if let url = Bundle.main.url(forResource: resourceName, withExtension: "svg"),
            let image = NSImage(contentsOf: url) {
             image.size = NSSize(width: 24, height: 17)
@@ -161,6 +166,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return image
         }
         return fallbackStatusIcon()
+    }
+
+    private var iconIsActive: Bool {
+        guard isEnabled else { return false }
+        guard typingPaused else { return true }
+        return pauseBlinkOn
+    }
+
+    private func updatePauseBlinkTimer() {
+        if isEnabled && typingPaused {
+            guard pauseBlinkTimer == nil else { return }
+            pauseBlinkOn = true
+            pauseBlinkTimer = Timer.scheduledTimer(withTimeInterval: 0.65, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                self.pauseBlinkOn.toggle()
+                self.updateIcon()
+            }
+        } else {
+            pauseBlinkTimer?.invalidate()
+            pauseBlinkTimer = nil
+            pauseBlinkOn = true
+        }
     }
 
     private func fallbackStatusIcon() -> NSImage {
