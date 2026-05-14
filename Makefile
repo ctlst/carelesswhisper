@@ -12,11 +12,13 @@ WHISPER_CPP_VERSION := v1.8.4
 WHISPER_CPP_ARCHIVE := .build/vendor/whisper.cpp-$(WHISPER_CPP_VERSION).tar.gz
 WHISPER_CPP_SRC := Vendor/whisper.cpp
 
-.PHONY: setup-native vendor-whisper build-whisper app-icon build run clean app install
+.PHONY: setup-native download-base-model vendor-whisper build-whisper app-icon build run clean app install
 
 setup-native:
 	$(MAKE) vendor-whisper
 	$(MAKE) build-whisper
+
+download-base-model:
 	mkdir -p .models/whisper.cpp
 	test -f "$(WHISPER_CPP_MODEL)" || curl -L "$(WHISPER_CPP_MODEL_URL)" -o "$(WHISPER_CPP_MODEL)"
 
@@ -46,7 +48,7 @@ app: setup-native app-icon build
 	cp "$(APP_ICON)" "$(RESOURCES)/CarelessWhisper.icns"
 	cp Assets/active.svg "$(RESOURCES)/active.svg"
 	cp Assets/inactive.svg "$(RESOURCES)/inactive.svg"
-	if [ -d ".models/whisper.cpp" ]; then mkdir -p "$(RESOURCES)/.models"; cp -R ".models/whisper.cpp" "$(RESOURCES)/.models/whisper.cpp"; fi
+	if [ "$(BUNDLE_MODELS)" = "1" ] && [ -d ".models/whisper.cpp" ]; then mkdir -p "$(RESOURCES)/.models"; cp -R ".models/whisper.cpp" "$(RESOURCES)/.models/whisper.cpp"; fi
 	codesign --force --deep --sign - "$(APP_DIR)"
 
 install: app

@@ -18,14 +18,14 @@ CarelessWhisper is built for local/offline use. Audio is recorded and transcribe
 - Sensitivity, start-delay, and stop-delay sliders.
 - Voice commands for stopping dictation and toggling common settings.
 - Sanitizes common Whisper non-speech tags such as `[MUSIC]`, `[SOUNDS]`, and `[BLANK_AUDIO]`.
-- Self-contained `.app` bundle with the GGML model file included.
+- Packaged `.app` can ship without a model and download the selected GGML model on demand.
 
 ## Requirements
 
 - macOS 14 or newer.
 - Xcode Command Line Tools.
 - CMake.
-- Internet access for the first build, to download `whisper.cpp` source and the GGML model.
+- Internet access for the first build, to download `whisper.cpp` source. A model is downloaded on first selection from the app menu unless you bundle one yourself.
 
 Install the command-line tools if needed:
 
@@ -67,12 +67,12 @@ Swift menu-bar app
 -> Swift VAD-style speech/silence detection
 -> C bridge
 -> linked whisper.cpp static libraries
--> bundled GGML model
+-> selected GGML model
 -> command parser
 -> CGEvent typing into the target app
 ```
 
-The app bundle contains the Swift executable and the model file. The model is data, so the install is one `.app` bundle rather than one literal executable.
+The app bundle contains the Swift executable and native `whisper.cpp` linkage. Model files are data loaded at runtime, so packaged builds can omit them and download the selected model into Application Support.
 
 ## Usage
 
@@ -163,13 +163,25 @@ For terminal targets, CarelessWhisper checks that a `claude`, `codex`, or `openc
 make setup-native
 ```
 
-Downloads vendored `whisper.cpp`, builds static libraries, and downloads `ggml-base.en.bin`.
+Downloads vendored `whisper.cpp` and builds static libraries.
+
+```bash
+make download-base-model
+```
+
+Downloads `ggml-base.en.bin` for local testing or bundled builds.
 
 ```bash
 make app
 ```
 
 Builds `CarelessWhisper.app` in the repo.
+
+By default, app bundles do not include model files. To include locally downloaded models in the bundle:
+
+```bash
+BUNDLE_MODELS=1 make app
+```
 
 ```bash
 make install

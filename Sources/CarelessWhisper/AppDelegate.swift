@@ -395,6 +395,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             scheduleArmCheck()
             return
         }
+        guard selectedModelIsAvailable else {
+            scheduleArmCheck()
+            return
+        }
         if !typeAnywhereEnabled {
             refreshLastTarget()
         }
@@ -544,6 +548,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let downloadingModel {
             return "Downloading \(downloadingModel.title)"
         }
+        if !selectedModelIsAvailable {
+            return "Download Model"
+        }
         if !isEnabled {
             return "Disabled"
         }
@@ -566,7 +573,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func modelMenuItem() -> NSMenuItem {
         let selected = whisperModels.first { $0.filename == selectedWhisperModel }
-        let title = selected.map { "Model: \($0.title)" } ?? "Model"
+        let title = selected.map {
+            modelFileExists($0.filename) ? "Model: \($0.title)" : "Model: Needed"
+        } ?? "Model"
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         let submenu = NSMenu()
 
@@ -595,6 +604,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         item.submenu = submenu
         return item
+    }
+
+    private var selectedModelIsAvailable: Bool {
+        modelFileExists(selectedWhisperModel)
     }
 
     private func modelFileExists(_ filename: String) -> Bool {
