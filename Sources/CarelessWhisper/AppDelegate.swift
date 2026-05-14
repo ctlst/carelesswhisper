@@ -323,6 +323,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             Submit:
             press return
+            press enter
+            turn off enter
+            toggle enter
             do not press return
             toggle submit
 
@@ -629,9 +632,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let submitOnCommands: Set<String> = [
             "enable submit",
+            "enable enter",
             "press return",
             "press enter",
             "turn on submit",
+            "turn on enter",
             "submit after typing"
         ]
         if submitOnCommands.contains(normalized) {
@@ -640,17 +645,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let submitOffCommands: Set<String> = [
             "disable submit",
+            "disable enter",
             "do not press return",
             "dont press return",
             "do not press enter",
             "dont press enter",
-            "turn off submit"
+            "turn off submit",
+            "turn off enter"
         ]
         if submitOffCommands.contains(normalized) {
             return .disableSubmit
         }
 
-        if normalized == "toggle submit" {
+        if normalized == "toggle submit" || normalized == "toggle enter" {
             return .toggleSubmit
         }
 
