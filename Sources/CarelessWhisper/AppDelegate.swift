@@ -467,8 +467,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Thread.sleep(forTimeInterval: 0.15)
             }
 
+            let submitKey: Typer.SubmitKey = isTerminalTarget(target) ? .keypadEnter : .return
             log("typing transcription into \(target.localizedName ?? "target"): \(text)")
-            typer.type(text, submit: submitAfterTyping)
+            typer.type(text, submit: submitAfterTyping, submitKey: submitKey)
         }
     }
 
@@ -511,6 +512,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return usableLastTarget()
         }
         return nil
+    }
+
+    private func isTerminalTarget(_ target: NSRunningApplication) -> Bool {
+        let terminalBundleIDs: Set<String> = [
+            "com.apple.Terminal",
+            "com.googlecode.iterm2",
+            "dev.warp.Warp-Stable",
+            "com.mitchellh.ghostty",
+            "io.alacritty",
+            "net.kovidgoyal.kitty",
+            "co.zeit.hyper",
+            "com.github.wez.wezterm"
+        ]
+        return target.bundleIdentifier.map { terminalBundleIDs.contains($0) } ?? false
     }
 
     private func usableLastTarget() -> NSRunningApplication? {

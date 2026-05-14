@@ -3,6 +3,11 @@ import CoreGraphics
 import Foundation
 
 final class Typer {
+    enum SubmitKey {
+        case `return`
+        case keypadEnter
+    }
+
     var hasAccessibilityPermission: Bool {
         AXIsProcessTrusted()
     }
@@ -12,7 +17,7 @@ final class Typer {
         AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
     }
 
-    func type(_ string: String, submit: Bool) {
+    func type(_ string: String, submit: Bool, submitKey: SubmitKey = .return) {
         guard hasAccessibilityPermission else { return }
         let source = CGEventSource(stateID: .hidSystemState)
 
@@ -28,7 +33,8 @@ final class Typer {
         }
 
         if submit {
-            pressReturn(source: source)
+            Thread.sleep(forTimeInterval: 0.08)
+            pressSubmit(source: source, key: submitKey)
         }
     }
 
@@ -40,11 +46,14 @@ final class Typer {
         pressKey(virtualKey: 0x06, flags: [.maskCommand, .maskShift])
     }
 
-    private func pressReturn(source: CGEventSource?) {
-        let returnDown = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: true)
-        let returnUp = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: false)
-        returnDown?.post(tap: .cghidEventTap)
-        returnUp?.post(tap: .cghidEventTap)
+    private func pressSubmit(source: CGEventSource?, key: SubmitKey) {
+        let virtualKey: CGKeyCode = key == .keypadEnter ? 0x4C : 0x24
+        let down = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true)
+        let up = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false)
+        down?.flags = []
+        up?.flags = []
+        down?.post(tap: .cghidEventTap)
+        up?.post(tap: .cghidEventTap)
     }
 
     private func pressKey(virtualKey: CGKeyCode, flags: CGEventFlags = []) {
