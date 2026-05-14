@@ -4,6 +4,11 @@ import Foundation
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private enum VoiceCommand {
         case stopListening
+        case undo
+        case redo
+        case toggleTypeAnywhere
+        case disableTypeAnywhere
+        case enableTypeAnywhere
         case toggleStickyTarget
         case disableStickyTarget
         case enableStickyTarget
@@ -41,6 +46,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         get { UserDefaults.standard.object(forKey: "stickyTargetEnabled") as? Bool ?? true }
         set {
             UserDefaults.standard.set(newValue, forKey: "stickyTargetEnabled")
+            refreshMenu()
+        }
+    }
+
+    private var typeAnywhereEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "typeAnywhereEnabled") as? Bool ?? false }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "typeAnywhereEnabled")
             refreshMenu()
         }
     }
@@ -86,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: 28)
         refreshMenu()
     }
 
@@ -97,10 +110,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateIcon() {
         statusItem.button?.image = statusIcon()
-        statusItem.button?.image?.isTemplate = true
+        statusItem.button?.image?.isTemplate = false
     }
 
     private func statusIcon() -> NSImage {
+        let resourceName = isEnabled ? "active" : "inactive"
+        if let url = Bundle.main.url(forResource: resourceName, withExtension: "svg"),
+           let image = NSImage(contentsOf: url) {
+            image.size = NSSize(width: 24, height: 17)
+            image.accessibilityDescription = "CarelessWhisper"
+            image.isTemplate = false
+            return image
+        }
+        return fallbackStatusIcon()
+    }
+
+    private func fallbackStatusIcon() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         image.lockFocus()
 
@@ -158,6 +183,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         enabled.state = isEnabled ? .on : .off
         menu.addItem(enabled)
 
+        let typeAnywhere = NSMenuItem(title: "Type Anywhere", action: #selector(toggleTypeAnywhere), keyEquivalent: "")
+        typeAnywhere.target = self
+        typeAnywhere.state = typeAnywhereEnabled ? .on : .off
+        menu.addItem(typeAnywhere)
+
         let submit = NSMenuItem(title: "Auto-Return", action: #selector(toggleSubmit), keyEquivalent: "")
         submit.target = self
         submit.state = submitAfterTyping ? .on : .off
@@ -166,6 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sticky = NSMenuItem(title: "Sticky Target", action: #selector(toggleStickyTarget), keyEquivalent: "")
         sticky.target = self
         sticky.state = stickyTargetEnabled ? .on : .off
+        sticky.isEnabled = !typeAnywhereEnabled
         menu.addItem(sticky)
 
         menu.addItem(.separator())
@@ -228,6 +259,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         submitAfterTyping.toggle()
     }
 
+    @objc private func toggleTypeAnywhere() {
+        typeAnywhereEnabled.toggle()
+        if isEnabled {
+            startAutomaticIfNeeded()
+        }
+    }
+
     @objc private func toggleStickyTarget() {
         stickyTargetEnabled.toggle()
         if !stickyTargetEnabled {
@@ -278,10 +316,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             disable sticky target
             toggle sticky target
 
+            Type anywhere:
+            type anywhere
+            targeted mode
+            toggle type anywhere
+
             Submit:
             press return
             do not press return
             toggle submit
+
+            Edit:
+            undo
+            redo
             """
         )
     }
@@ -289,7 +336,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startAutomaticIfNeeded() {
         guard isEnabled else { return }
         guard !isDictating else { return }
-        refreshLastTarget()
+        if !typeAnywhereEnabled {
+            refreshLastTarget()
+        }
 
         guard typer.hasAccessibilityPermission else {
             scheduleArmCheck()
@@ -404,13 +453,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            refreshLastTarget()
+            if !typeAnywhereEnabled {
+                refreshLastTarget()
+            }
             guard let target = typingTarget() else {
                 log("blocked after transcription: no typing target")
                 return
             }
 
-            if stickyTargetEnabled && !target.isActive {
+            if !typeAnywhereEnabled && stickyTargetEnabled && !target.isActive {
                 log("activating remembered target: \(target.localizedName ?? "unknown") [\(target.bundleIdentifier ?? "unknown")]")
                 target.activate(options: [])
                 Thread.sleep(forTimeInterval: 0.15)
@@ -428,6 +479,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if isDictating {
             return "Listening"
         }
+        if typeAnywhereEnabled {
+            let appName = NSWorkspace.shared.frontmostApplication?.localizedName ?? "current app"
+            return "Anywhere: \(appName)"
+        }
         if let current = focus.currentSupportedApplication() {
             lastTarget = current
             return "Armed: \(current.localizedName ?? "target")"
@@ -439,12 +494,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshLastTarget() {
+        guard !typeAnywhereEnabled else { return }
         if let current = focus.currentSupportedApplication() {
             lastTarget = current
         }
     }
 
     private func typingTarget() -> NSRunningApplication? {
+        if typeAnywhereEnabled {
+            return NSWorkspace.shared.frontmostApplication
+        }
         if let current = focus.currentSupportedApplication() {
             return current
         }
@@ -493,6 +552,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         if stopCommands.contains(normalized) {
             return .stopListening
+        }
+
+        if normalized == "undo" {
+            return .undo
+        }
+
+        if normalized == "redo" {
+            return .redo
+        }
+
+        let typeAnywhereOnCommands: Set<String> = [
+            "type anywhere",
+            "enable type anywhere",
+            "turn on type anywhere",
+            "dictate anywhere"
+        ]
+        if typeAnywhereOnCommands.contains(normalized) {
+            return .enableTypeAnywhere
+        }
+
+        let typeAnywhereOffCommands: Set<String> = [
+            "targeted mode",
+            "disable type anywhere",
+            "turn off type anywhere",
+            "do not type anywhere",
+            "dont type anywhere"
+        ]
+        if typeAnywhereOffCommands.contains(normalized) {
+            return .disableTypeAnywhere
+        }
+
+        if normalized == "toggle type anywhere" {
+            return .toggleTypeAnywhere
         }
 
         let stickyOnCommands: Set<String> = [
@@ -557,6 +649,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .stopListening:
             isEnabled = false
             disarm()
+        case .undo:
+            typer.undo()
+        case .redo:
+            typer.redo()
+        case .toggleTypeAnywhere:
+            typeAnywhereEnabled.toggle()
+        case .disableTypeAnywhere:
+            typeAnywhereEnabled = false
+        case .enableTypeAnywhere:
+            typeAnywhereEnabled = true
         case .toggleStickyTarget:
             stickyTargetEnabled.toggle()
             if !stickyTargetEnabled {

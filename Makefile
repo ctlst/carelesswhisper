@@ -44,6 +44,8 @@ app: setup-native app-icon build
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(MACOS)/$(APP_NAME)"
 	cp Info.plist "$(CONTENTS)/Info.plist"
 	cp "$(APP_ICON)" "$(RESOURCES)/CarelessWhisper.icns"
+	cp Assets/active.svg "$(RESOURCES)/active.svg"
+	cp Assets/inactive.svg "$(RESOURCES)/inactive.svg"
 	if [ -d ".models/whisper.cpp" ]; then mkdir -p "$(RESOURCES)/.models"; cp -R ".models/whisper.cpp" "$(RESOURCES)/.models/whisper.cpp"; fi
 	codesign --force --deep --sign - "$(APP_DIR)"
 

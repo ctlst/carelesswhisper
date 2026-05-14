@@ -1,5 +1,7 @@
 # CarelessWhisper
 
+![CarelessWhisper voice control preview](Assets/readme-hero.png)
+
 CarelessWhisper is a macOS menu-bar dictation injector for Claude, Codex, and OpenCode.
 
 When enabled, it listens for speech, transcribes locally with a directly linked `whisper.cpp` backend, and types the result into a supported coding-agent window. It can also remember the last supported target, so you can click around in other apps while still dictating back into your terminal or agent.
@@ -42,9 +44,11 @@ brew install cmake
 ```bash
 git clone https://github.com/ctlst/carelesswhisper.git
 cd carelesswhisper
-make install
+./install.sh
 open /Applications/CarelessWhisper.app
 ```
+
+`install.sh` checks for the required macOS build tools, then runs `make install`.
 
 On first launch, grant:
 
@@ -78,12 +82,14 @@ When enabled:
 
 - If Claude, Codex, OpenCode, or a supported terminal running one of those CLIs is focused, CarelessWhisper listens for speech.
 - If speech is detected, it records until silence, transcribes, types the text, optionally presses Return, then listens again.
+- If type-anywhere mode is on, CarelessWhisper skips target checks and types into the currently focused app/cursor.
 - If sticky target mode is on, CarelessWhisper remembers the last supported target and reactivates it before typing.
-- If sticky target mode is off and no supported target is focused, it waits without recording or injecting text.
+- If type-anywhere mode is off, sticky target mode is off, and no supported target is focused, it waits without recording or injecting text.
 
 Menu controls:
 
 - **Enabled**: arms/disarms listening.
+- **Type Anywhere**: bypasses Claude/Codex/OpenCode targeting and types into the current focused app.
 - **Auto-Return**: submits after typing.
 - **Sticky Target**: reactivates the last supported target before typing.
 - **Sensitivity**: higher values detect quieter speech.
@@ -101,11 +107,22 @@ Stop dictation:
 - `disable dictation`
 - `turn off listening`
 
+Edit commands:
+
+- `undo`
+- `redo`
+
 Sticky target:
 
 - `enable sticky target`
 - `disable sticky target`
 - `toggle sticky target`
+
+Type anywhere:
+
+- `type anywhere`
+- `targeted mode`
+- `toggle type anywhere`
 
 Submit behavior:
 

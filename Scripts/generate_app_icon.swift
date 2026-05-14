@@ -5,6 +5,8 @@ let outputPath = CommandLine.arguments.dropFirst().first ?? ".build/CarelessWhis
 let outputURL = URL(fileURLWithPath: outputPath)
 let buildDir = outputURL.deletingLastPathComponent()
 let iconsetURL = buildDir.appendingPathComponent("CarelessWhisper.iconset", isDirectory: true)
+let sourceIconURL = URL(fileURLWithPath: "Assets/active.svg")
+let sourceIcon = NSImage(contentsOf: sourceIconURL)
 
 try FileManager.default.createDirectory(at: buildDir, withIntermediateDirectories: true)
 try? FileManager.default.removeItem(at: iconsetURL)
@@ -20,6 +22,19 @@ let variants: [(points: Int, scale: Int)] = [
 
 func scaled(_ value: CGFloat, _ size: CGFloat) -> CGFloat {
     value / 1024.0 * size
+}
+
+func aspectFitRect(imageSize: NSSize, in bounds: NSRect) -> NSRect {
+    guard imageSize.width > 0, imageSize.height > 0 else { return bounds }
+    let scale = min(bounds.width / imageSize.width, bounds.height / imageSize.height)
+    let width = imageSize.width * scale
+    let height = imageSize.height * scale
+    return NSRect(
+        x: bounds.midX - width / 2,
+        y: bounds.midY - height / 2,
+        width: width,
+        height: height
+    )
 }
 
 func renderIcon(size: Int) throws -> Data {
@@ -45,6 +60,22 @@ func renderIcon(size: Int) throws -> Data {
     let bounds = NSRect(x: 0, y: 0, width: side, height: side)
     NSColor.clear.setFill()
     bounds.fill()
+
+    if let sourceIcon {
+        let imageBounds = bounds.insetBy(dx: scaled(56, side), dy: scaled(56, side))
+        sourceIcon.draw(
+            in: aspectFitRect(imageSize: sourceIcon.size, in: imageBounds),
+            from: NSRect(origin: .zero, size: sourceIcon.size),
+            operation: .sourceOver,
+            fraction: 1.0
+        )
+        NSGraphicsContext.restoreGraphicsState()
+
+        guard let data = rep.representation(using: .png, properties: [:]) else {
+            throw NSError(domain: "CarelessWhisperIcon", code: 2)
+        }
+        return data
+    }
 
     let background = NSBezierPath(
         roundedRect: bounds.insetBy(dx: scaled(72, side), dy: scaled(72, side)),

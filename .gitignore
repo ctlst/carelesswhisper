@@ -17,6 +17,7 @@ Vendor/
 *.log
 *.tmp
 .env
+scratch/
 
 # Editor metadata
 .idea/

@@ -32,10 +32,30 @@ final class Typer {
         }
     }
 
+    func undo() {
+        pressKey(virtualKey: 0x06, flags: .maskCommand)
+    }
+
+    func redo() {
+        pressKey(virtualKey: 0x06, flags: [.maskCommand, .maskShift])
+    }
+
     private func pressReturn(source: CGEventSource?) {
         let returnDown = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: true)
         let returnUp = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: false)
         returnDown?.post(tap: .cghidEventTap)
         returnUp?.post(tap: .cghidEventTap)
+    }
+
+    private func pressKey(virtualKey: CGKeyCode, flags: CGEventFlags = []) {
+        guard hasAccessibilityPermission else { return }
+        let source = CGEventSource(stateID: .hidSystemState)
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false)
+        else { return }
+        down.flags = flags
+        up.flags = flags
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
     }
 }
