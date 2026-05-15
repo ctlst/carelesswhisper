@@ -94,6 +94,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private var showBuddy: Bool {
+        get { UserDefaults.standard.object(forKey: "showBuddy") as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "showBuddy")
+            if !newValue {
+                transcriptionOverlay.hide()
+            }
+            refreshMenu()
+        }
+    }
+
     private var sensitivity: Double {
         get { UserDefaults.standard.object(forKey: "sensitivity") as? Double ?? 55 }
         set {
@@ -144,6 +155,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: 28)
+        transcriptionOverlay.onClick = { [weak self] in
+            self?.statusItem.button?.performClick(nil)
+        }
         updatePauseBlinkTimer()
         refreshMenu()
     }
@@ -256,6 +270,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pauseTyping.isEnabled = isEnabled
         menu.addItem(pauseTyping)
 
+        let buddy = NSMenuItem(title: "Show Buddy", action: #selector(toggleBuddy), keyEquivalent: "")
+        buddy.target = self
+        buddy.state = showBuddy ? .on : .off
+        menu.addItem(buddy)
+
         let typeAnywhere = NSMenuItem(title: "Type Anywhere", action: #selector(toggleTypeAnywhere), keyEquivalent: "")
         typeAnywhere.target = self
         typeAnywhere.state = typeAnywhereEnabled ? .on : .off
@@ -339,6 +358,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         typingPaused.toggle()
         if isEnabled {
             startAutomaticIfNeeded()
+        }
+    }
+
+    @objc private func toggleBuddy() {
+        showBuddy.toggle()
+        if showBuddy && (isDictating || isTranscribing) {
+            transcriptionOverlay.show()
         }
     }
 
@@ -503,6 +529,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             applyRecorderSettings()
             isDictating = true
+            if showBuddy {
+                transcriptionOverlay.show()
+            }
             refreshMenu()
             log("recording started")
             try recorder.recordUntilSilence { [weak self] url in
@@ -512,6 +541,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } catch {
             isDictating = false
+            transcriptionOverlay.hide()
             refreshMenu()
             log("recording failed: \(error.localizedDescription)")
             scheduleArmCheck()
@@ -521,6 +551,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleRecording(_ url: URL?) {
         guard downloadingModel == nil else {
             isDictating = false
+            transcriptionOverlay.hide()
             refreshMenu()
             log("recording ignored while model download is active")
             scheduleArmCheck(after: 1.0)
@@ -529,6 +560,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard let url else {
             isDictating = false
+            transcriptionOverlay.hide()
             refreshMenu()
             log("recording ended without speech")
             scheduleArmCheck(after: 0.2)
@@ -536,7 +568,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         isTranscribing = true
-        transcriptionOverlay.show()
+        if showBuddy {
+            transcriptionOverlay.show()
+        }
         refreshMenu()
         log("recording saved: \(url.path)")
         DispatchQueue.global(qos: .userInitiated).async {

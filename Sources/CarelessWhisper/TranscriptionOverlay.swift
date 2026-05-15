@@ -8,14 +8,22 @@ final class TranscriptionOverlay {
     private var window: NSWindow?
     private var timer: Timer?
     private var frameIndex = 0
+    var onClick: (() -> Void)?
 
     func show() {
-        guard let sprite = NSImage(named: "cat-sprite") else { return }
+        guard let spriteURL = Bundle.main.url(forResource: "cat-sprite", withExtension: "png"),
+              let sprite = NSImage(contentsOf: spriteURL) else { return }
 
         if window == nil {
             imageView.sprite = sprite
             imageView.frameCount = frameCount
             imageView.frameIndex = 0
+            imageView.onClick = { [weak self] in
+                self?.onClick?()
+            }
+            imageView.onMove = { [weak self] origin in
+                self?.savePosition(origin)
+            }
 
             let frameWidth = max(sprite.size.width / CGFloat(frameCount), 1)
             let frameHeight = max(sprite.size.height, 1)
@@ -33,7 +41,7 @@ final class TranscriptionOverlay {
             overlay.backgroundColor = .clear
             overlay.isOpaque = false
             overlay.hasShadow = false
-            overlay.ignoresMouseEvents = true
+            overlay.ignoresMouseEvents = false
             overlay.level = .statusBar
             overlay.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window = overlay
@@ -51,6 +59,11 @@ final class TranscriptionOverlay {
 
     private func positionWindow() {
         guard let screen = NSScreen.main, let window else { return }
+        if let saved = savedPosition(for: window.frame.size), screen.visibleFrame.contains(saved) {
+            window.setFrameOrigin(saved)
+            return
+        }
+
         let visibleFrame = screen.visibleFrame
         let size = window.frame.size
         let origin = NSPoint(
@@ -58,6 +71,27 @@ final class TranscriptionOverlay {
             y: visibleFrame.maxY - size.height - 10
         )
         window.setFrameOrigin(origin)
+    }
+
+    private func savePosition(_ origin: NSPoint) {
+        UserDefaults.standard.set(origin.x, forKey: "buddyOverlayX")
+        UserDefaults.standard.set(origin.y, forKey: "buddyOverlayY")
+    }
+
+    private func savedPosition(for size: NSSize) -> NSPoint? {
+        guard UserDefaults.standard.object(forKey: "buddyOverlayX") != nil,
+              UserDefaults.standard.object(forKey: "buddyOverlayY") != nil else { return nil }
+        let point = NSPoint(
+            x: UserDefaults.standard.double(forKey: "buddyOverlayX"),
+            y: UserDefaults.standard.double(forKey: "buddyOverlayY")
+        )
+        guard let screen = NSScreen.screens.first(where: { $0.visibleFrame.intersects(NSRect(origin: point, size: size)) }) else {
+            return nil
+        }
+        return NSPoint(
+            x: min(max(point.x, screen.visibleFrame.minX), screen.visibleFrame.maxX - size.width),
+            y: min(max(point.y, screen.visibleFrame.minY), screen.visibleFrame.maxY - size.height)
+        )
     }
 
     private func startAnimating() {
@@ -83,8 +117,41 @@ private final class SpriteImageView: NSView {
     var sprite: NSImage?
     var frameCount = 1
     var frameIndex = 0
+    var onClick: (() -> Void)?
+    var onMove: ((NSPoint) -> Void)?
+    private var dragStartLocation: NSPoint?
+    private var dragStartOrigin: NSPoint?
+    private var didDrag = false
 
     override var isOpaque: Bool { false }
+
+    override func mouseDown(with event: NSEvent) {
+        dragStartLocation = NSEvent.mouseLocation
+        dragStartOrigin = window?.frame.origin
+        didDrag = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let window, let dragStartLocation, let dragStartOrigin else { return }
+        let current = NSEvent.mouseLocation
+        let delta = NSPoint(x: current.x - dragStartLocation.x, y: current.y - dragStartLocation.y)
+        if abs(delta.x) > 2 || abs(delta.y) > 2 {
+            didDrag = true
+        }
+        window.setFrameOrigin(NSPoint(x: dragStartOrigin.x + delta.x, y: dragStartOrigin.y + delta.y))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if didDrag {
+            if let origin = window?.frame.origin {
+                onMove?(origin)
+            }
+        } else {
+            onClick?()
+        }
+        dragStartLocation = nil
+        dragStartOrigin = nil
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
