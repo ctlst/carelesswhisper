@@ -48,6 +48,7 @@ app: setup-native app-icon build
 	cp "$(APP_ICON)" "$(RESOURCES)/CarelessWhisper.icns"
 	cp Assets/active.svg "$(RESOURCES)/active.svg"
 	cp Assets/inactive.svg "$(RESOURCES)/inactive.svg"
+	if [ -f "Assets/cat-sprite.png" ]; then cp Assets/cat-sprite.png "$(RESOURCES)/cat-sprite.png"; fi
 	if [ "$(BUNDLE_MODELS)" = "1" ] && [ -d ".models/whisper.cpp" ]; then mkdir -p "$(RESOURCES)/.models"; cp -R ".models/whisper.cpp" "$(RESOURCES)/.models/whisper.cpp"; fi
 	codesign --force --deep --sign - "$(APP_DIR)"
 

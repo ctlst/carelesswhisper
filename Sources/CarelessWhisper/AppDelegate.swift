@@ -35,7 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let typer = Typer()
     private let recorder = AudioRecorder()
     private let transcriber = WhisperTranscriber()
+    private let transcriptionOverlay = TranscriptionOverlay()
     private var isDictating = false
+    private var isTranscribing = false
     private var armTimer: Timer?
     private var pauseBlinkTimer: Timer?
     private var pauseBlinkOn = true
@@ -491,6 +493,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         armTimer = nil
         recorder.stop()
         isDictating = false
+        isTranscribing = false
+        transcriptionOverlay.hide()
         refreshMenu()
         log("disabled")
     }
@@ -531,6 +535,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        isTranscribing = true
+        transcriptionOverlay.show()
+        refreshMenu()
         log("recording saved: \(url.path)")
         DispatchQueue.global(qos: .userInitiated).async {
             let result: Result<TranscriptionResult, Error>
@@ -548,6 +555,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleTranscription(_ result: Result<TranscriptionResult, Error>) {
         isDictating = false
+        isTranscribing = false
+        transcriptionOverlay.hide()
         refreshMenu()
         defer {
             if isEnabled {
@@ -617,6 +626,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if typingPaused {
             return isDictating ? "Paused: Listening" : "Paused"
+        }
+        if isTranscribing {
+            return "Transcribing"
         }
         if isDictating {
             return "Listening"
