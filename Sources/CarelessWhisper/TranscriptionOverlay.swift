@@ -3,6 +3,7 @@ import AppKit
 final class TranscriptionOverlay {
     private let frameCount = 4
     private let frameInterval: TimeInterval = 0.16
+    private let overlayWidth: CGFloat = 220
     private let imageView = SpriteImageView()
     private var window: NSWindow?
     private var timer: Timer?
@@ -16,7 +17,12 @@ final class TranscriptionOverlay {
             imageView.frameCount = frameCount
             imageView.frameIndex = 0
 
-            let frameSize = NSSize(width: 160, height: 100)
+            let frameWidth = max(sprite.size.width / CGFloat(frameCount), 1)
+            let frameHeight = max(sprite.size.height, 1)
+            let frameSize = NSSize(
+                width: overlayWidth,
+                height: overlayWidth * (frameHeight / frameWidth)
+            )
             let overlay = NSWindow(
                 contentRect: NSRect(origin: .zero, size: frameSize),
                 styleMask: [.borderless],
