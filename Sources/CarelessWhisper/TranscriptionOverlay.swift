@@ -14,9 +14,8 @@ final class TranscriptionOverlay {
               let sprite = NSImage(contentsOf: spriteURL) else { return }
 
         if window == nil {
-            let spriteFrameCount = max(1, Int((sprite.size.width / max(sprite.size.height, 1)).rounded()))
-            imageView.sprite = sprite
-            imageView.frameCount = spriteFrameCount
+            let frames = splitFrames(from: sprite)
+            imageView.frames = frames
             imageView.frameIndex = 0
             imageView.onClick = { [weak self] in
                 self?.onClick?()
@@ -25,8 +24,9 @@ final class TranscriptionOverlay {
                 self?.savePosition(origin)
             }
 
-            let frameWidth = max(sprite.size.width / CGFloat(spriteFrameCount), 1)
-            let frameHeight = max(sprite.size.height, 1)
+            let sourceFrameSize = frames.first?.size ?? NSSize(width: 1, height: 1)
+            let frameWidth = max(sourceFrameSize.width, 1)
+            let frameHeight = max(sourceFrameSize.height, 1)
             let frameSize = NSSize(
                 width: overlayWidth,
                 height: overlayWidth * (frameHeight / frameWidth)
@@ -111,11 +111,58 @@ final class TranscriptionOverlay {
         imageView.frameIndex = 0
         imageView.needsDisplay = true
     }
+
+    private func splitFrames(from sprite: NSImage) -> [NSImage] {
+        guard let sheet = sprite.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return [sprite]
+        }
+
+        let frameSize = sheet.height
+        guard frameSize > 0 else { return [sprite] }
+
+        let count = max(1, sheet.width / frameSize)
+        return (0..<count).compactMap { index in
+            let rect = CGRect(x: index * frameSize, y: 0, width: frameSize, height: frameSize)
+            guard let frame = sheet.cropping(to: rect) else { return nil }
+            let image = NSImage(cgImage: frame, size: NSSize(width: frameSize, height: frameSize))
+            return frameIsVisible(frame) ? image : nil
+        }
+    }
+
+    private func frameIsVisible(_ frame: CGImage) -> Bool {
+        guard let dataProvider = frame.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else {
+            return true
+        }
+
+        let bytesPerPixel = max(frame.bitsPerPixel / 8, 1)
+        guard bytesPerPixel >= 4 else { return true }
+
+        let width = frame.width
+        let height = frame.height
+        let bytesPerRow = frame.bytesPerRow
+        var visiblePixels = 0
+
+        for y in 0..<height {
+            let row = bytes + y * bytesPerRow
+            for x in 0..<width {
+                if row[x * bytesPerPixel + 3] > 8 {
+                    visiblePixels += 1
+                    if visiblePixels > 64 {
+                        return true
+                    }
+                }
+            }
+        }
+
+        return false
+    }
 }
 
 private final class SpriteImageView: NSView {
-    var sprite: NSImage?
-    var frameCount = 1
+    var frames: [NSImage] = []
+    var frameCount: Int { max(frames.count, 1) }
     var frameIndex = 0
     var onClick: (() -> Void)?
     var onMove: ((NSPoint) -> Void)?
@@ -155,19 +202,11 @@ private final class SpriteImageView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        guard let sprite, frameCount > 0 else { return }
+        guard !frames.isEmpty else { return }
 
-        let frameWidth = sprite.size.width / CGFloat(frameCount)
-        let source = NSRect(
-            x: frameWidth * CGFloat(frameIndex),
-            y: 0,
-            width: frameWidth,
-            height: sprite.size.height
-        )
-
-        sprite.draw(
+        frames[min(frameIndex, frames.count - 1)].draw(
             in: bounds,
-            from: source,
+            from: NSRect(origin: .zero, size: frames[min(frameIndex, frames.count - 1)].size),
             operation: .sourceOver,
             fraction: 1.0,
             respectFlipped: false,
