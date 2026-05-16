@@ -1,7 +1,6 @@
 import AppKit
 
 final class TranscriptionOverlay {
-    private let frameCount = 4
     private let frameInterval: TimeInterval = 0.16
     private let overlayWidth: CGFloat = 220
     private let imageView = SpriteImageView()
@@ -15,8 +14,9 @@ final class TranscriptionOverlay {
               let sprite = NSImage(contentsOf: spriteURL) else { return }
 
         if window == nil {
+            let spriteFrameCount = max(1, Int((sprite.size.width / max(sprite.size.height, 1)).rounded()))
             imageView.sprite = sprite
-            imageView.frameCount = frameCount
+            imageView.frameCount = spriteFrameCount
             imageView.frameIndex = 0
             imageView.onClick = { [weak self] in
                 self?.onClick?()
@@ -25,7 +25,7 @@ final class TranscriptionOverlay {
                 self?.savePosition(origin)
             }
 
-            let frameWidth = max(sprite.size.width / CGFloat(frameCount), 1)
+            let frameWidth = max(sprite.size.width / CGFloat(spriteFrameCount), 1)
             let frameHeight = max(sprite.size.height, 1)
             let frameSize = NSSize(
                 width: overlayWidth,
@@ -98,7 +98,7 @@ final class TranscriptionOverlay {
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: frameInterval, repeats: true) { [weak self] _ in
             guard let self else { return }
-            self.frameIndex = (self.frameIndex + 1) % self.frameCount
+            self.frameIndex = (self.frameIndex + 1) % self.imageView.frameCount
             self.imageView.frameIndex = self.frameIndex
             self.imageView.needsDisplay = true
         }
