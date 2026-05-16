@@ -1,7 +1,7 @@
 import AppKit
 
 final class TranscriptionOverlay {
-    private let frameInterval: TimeInterval = 0.16
+    private let frameInterval: TimeInterval = 0.32
     private let overlayWidth: CGFloat = 220
     private let imageView = SpriteImageView()
     private var window: NSWindow?
